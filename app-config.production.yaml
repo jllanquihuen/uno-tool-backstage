@@ -1,0 +1,86 @@
+app:
+  baseUrl: http://localhost:7007
+
+backend:
+  baseUrl: http://localhost:7007
+  listen: ':7007'
+
+  database:
+    client: better-sqlite3
+    connection:
+      directory: /app/data
+
+auth:
+  providers:
+    guest:
+      dangerouslyAllowOutsideDevelopment: true
+
+    github:
+      development:
+        clientId: ${AUTH_GITHUB_CLIENT_ID}
+        clientSecret: ${AUTH_GITHUB_CLIENT_SECRET}
+
+integrations:
+  github:
+    - host: github.com
+      token: ${GITHUB_TOKEN}
+
+techdocs:
+  builder: local
+  generator:
+    runIn: local
+  publisher:
+    type: local
+
+catalog:
+  import:
+    entityFilename: catalog-info.yaml
+    pullRequestBranchName: backstage-integration
+
+  rules:
+    - allow:
+        - Component
+        - System
+        - API
+        - Resource
+        - Location
+        - Template
+        - User
+        - Group
+
+  locations:
+    - type: url
+      target: https://github.com/jllanquihuen/uno-tool-backstage-catalog/blob/master/output/catalog-info.yaml
+
+    - type: url
+      target: https://github.com/unoafp/uno-tool-backstage-templates-py/blob/main/templates/python-microservice/template.yaml
+      rules:
+        - allow:
+            - Template
+
+    - type: file
+      target: ./examples/template/template.yaml
+      rules:
+        - allow:
+            - Template
+
+    - type: file
+      target: ./examples/org.yaml
+      rules:
+        - allow:
+            - User
+            - Group
+
+scaffolder: {}
+
+kubernetes:
+  serviceLocatorMethod:
+    type: multiTenant
+  clusterLocatorMethods: []
+
+permission:
+  enabled: true
+
+mcpActions:
+  name: 'My Company Backstage'
+  description: 'Tools for managing your software catalog, creating new services from templates, and exploring your developer portal'
