@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backstage-data
+  namespace: backstage
+spec:
+  # ReadWriteOnce = un solo pod puede montar el volumen a la vez.
+  # Suficiente para 1 replica con SQLite + TechDocs local.
+  # Si en el futuro escalas a varias replicas, necesitaras EFS (ReadWriteMany).
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # En EKS Auto Mode la StorageClass gestionada para EBS es 'auto-ebs-sc'.
+  # (No uses 'gp3': ese provisioner no existe en Auto Mode y el PVC quedaria Pending.)
+  # Confirma el nombre real en tu cluster con: kubectl get storageclass
+  storageClassName: auto-ebs-sc

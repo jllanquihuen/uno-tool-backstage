@@ -1,0 +1,33 @@
+# -----------------------------------------------------------------------------
+# Overrides para el despliegue en EKS.
+# Se aplica ENCIMA de app-config.yaml y app-config.production.yaml.
+# Ver README en k8s/ para como inyectarlo.
+#
+# Lo unico imprescindible aqui es cambiar baseUrl a tu dominio real,
+# porque con localhost el frontend y el login por GitHub no funcionan
+# detras del ALB.
+# -----------------------------------------------------------------------------
+app:
+  baseUrl: https://backstage.tu-dominio.com
+
+backend:
+  baseUrl: https://backstage.tu-dominio.com
+  listen: ':7007'
+  cors:
+    origin: https://backstage.tu-dominio.com
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+    credentials: true
+
+  # Sigue usando SQLite sobre el volumen persistente (/app/data).
+  # Cuando migres a Postgres, reemplaza este bloque por client: pg.
+  database:
+    client: better-sqlite3
+    connection:
+      directory: /app/data
+
+techdocs:
+  builder: local
+  generator:
+    runIn: local
+  publisher:
+    type: local

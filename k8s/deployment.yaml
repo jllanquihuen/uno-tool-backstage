@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backstage
+  namespace: backstage
+  labels:
+    app: backstage
+spec:
+  # 1 replica: obligatorio con SQLite + PVC ReadWriteOnce.
+  # No subas este numero sin migrar antes a Postgres + storage compartido.
+  replicas: 1
+  strategy:
+    # Recreate evita que dos pods intenten montar el mismo EBS a la vez
+    # durante un rollout (el volumen RWO no lo permite).
+    type: Recreate
+  selector:
+    matchLabels:
+      app: backstage
+  template:
+    metadata:
+      labels:
+        app: backstage
+    spec:
+      securityContext:
+        # El Dockerfile corre como usuario 'node' (uid 1000).
+        # fsGroup asegura que el volumen montado sea escribible por ese usuario.
+        fsGroup: 1000
+      containers:
+        - name: backstage
+          # REEMPLAZAR por la URI de tu imagen en ECR, por ejemplo:
+          # <account>.dkr.ecr.<region>.amazonaws.com/backstage:latest
+          image: REEMPLAZAR_ECR_IMAGE_URI
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 7007
+          env:
+            # TechDocs local publica el HTML aqui; queda en el volumen persistente.
+            - name: TECHDOCS_PUBLISHER_LOCAL_PUBLISH_DIR
+              value: /app/data/techdocs
+          envFrom:
+            - secretRef:
+                name: backstage-secrets
+          volumeMounts:
+            - name: backstage-data
+              mountPath: /app/data
+          # Backend system nuevo (createBackend): los endpoints de salud son
+          # /.backstage/health/v1/{readiness,liveness}, NO /healthcheck (ese era
+          # del backend legacy con Express).
+          readinessProbe:
+            httpGet:
+              path: /.backstage/health/v1/readiness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /.backstage/health/v1/liveness
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+      volumes:
+        - name: backstage-data
+          persistentVolumeClaim:
+            claimName: backstage-data
