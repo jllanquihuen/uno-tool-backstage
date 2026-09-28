@@ -1,0 +1,103 @@
+name: Build & Push Backstage image to ECR
+
+# Construye la imagen de Backstage (host build) y la publica en el ECR de la
+# cuenta AWS de la plataforma, autenticándose por OIDC (sin llaves).
+#
+# Requisitos (configurar en Settings del repo):
+#   Secrets:
+#     AWS_ROLE_ARN   -> ARN del rol github-actions-ecr-push (output del bootstrap)
+#   Variables:
+#     AWS_REGION     -> ej. us-east-1
+#     ECR_REPOSITORY -> ej. backstage
+#
+# El tag de la imagen es el SHA corto del commit (inmutable, para rollback/auditoría).
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # requerido para el OIDC assume-role
+
+concurrency:
+  group: build-push-ecr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable Corepack (Yarn 4)
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Type check
+        run: yarn tsc
+
+      - name: Build backend (genera skeleton.tar.gz + bundle.tar.gz)
+        run: yarn build:backend
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Resolve image tag (short SHA)
+        id: meta
+        run: echo "sha=$(git rev-parse --short=12 HEAD)" >> "${GITHUB_OUTPUT}"
+
+      - name: Build image
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          TAG: ${{ steps.meta.outputs.sha }}
+        run: |
+          set -euo pipefail
+          # Contexto = raíz del repo; el Dockerfile vive en packages/backend.
+          DOCKER_BUILDKIT=1 docker build \
+            -f packages/backend/Dockerfile \
+            -t "${REGISTRY}/${REPOSITORY}:${TAG}" \
+            .
+
+      - name: Push image
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          TAG: ${{ steps.meta.outputs.sha }}
+        run: |
+          set -euo pipefail
+          docker push "${REGISTRY}/${REPOSITORY}:${TAG}"
+          echo "Imagen publicada: ${REGISTRY}/${REPOSITORY}:${TAG}"
+
+      - name: Image reference summary
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          TAG: ${{ steps.meta.outputs.sha }}
+        run: |
+          {
+            echo "### Imagen publicada"
+            echo ""
+            echo '```'
+            echo "${REGISTRY}/${REPOSITORY}:${TAG}"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
