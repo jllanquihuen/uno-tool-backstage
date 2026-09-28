@@ -1,0 +1,53 @@
+# -----------------------------------------------------------------------------
+# ConfigMaps para la config de EKS de Backstage.
+#
+# 1) backstage-app-config-eks: contiene app-config.eks.yaml como archivo, que se
+#    monta en el pod y se pasa como --config extra (ver deployment.yaml).
+#    Este archivo usa ${BACKSTAGE_BASE_URL}; NO lleva el dominio hardcodeado.
+#
+# 2) backstage-config: variables de entorno NO sensibles (el dominio). Se inyecta
+#    vía envFrom. Editar aqui el dominio cuando la exposicion/DNS este definida;
+#    NO hace falta reconstruir la imagen.
+#
+# Los SECRETOS (GITHUB_TOKEN, AUTH_GITHUB_CLIENT_ID/SECRET) van en el Secret
+# backstage-secrets, no aqui.
+# -----------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backstage-app-config-eks
+  namespace: backstage
+data:
+  app-config.eks.yaml: |
+    app:
+      baseUrl: ${BACKSTAGE_BASE_URL}
+
+    backend:
+      baseUrl: ${BACKSTAGE_BASE_URL}
+      listen: ':7007'
+      cors:
+        origin: ${BACKSTAGE_BASE_URL}
+        methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+        credentials: true
+      database:
+        client: better-sqlite3
+        connection:
+          directory: /app/data
+
+    techdocs:
+      builder: local
+      generator:
+        runIn: local
+      publisher:
+        type: local
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backstage-config
+  namespace: backstage
+data:
+  # Dominio de Backstage. POR DEFINIR (exposicion/DNS aun no resuelta).
+  # Placeholder: reemplazar por el dominio real (debe coincidir con el host del
+  # Ingress). Ej: https://backstage.dev.afpuno.cl
+  BACKSTAGE_BASE_URL: "https://backstage.PLACEHOLDER.example.com"

@@ -1,20 +1,24 @@
 # -----------------------------------------------------------------------------
 # Overrides para el despliegue en EKS.
-# Se aplica ENCIMA de app-config.yaml y app-config.production.yaml.
-# Ver README en k8s/ para como inyectarlo.
+# Se aplica ENCIMA de app-config.yaml y app-config.production.yaml (ultimo --config
+# gana). Se inyecta en el pod como ConfigMap montado + un --config extra en los
+# args del Deployment (ver k8s/deployment.yaml y k8s/configmap-app-config.yaml).
 #
-# Lo unico imprescindible aqui es cambiar baseUrl a tu dominio real,
-# porque con localhost el frontend y el login por GitHub no funcionan
-# detras del ALB.
+# El dominio NO se hardcodea: se toma de la variable de entorno
+# ${BACKSTAGE_BASE_URL} (Backstage interpola ${VAR} nativamente al arrancar).
+# La define el ConfigMap backstage-config (k8s/configmap-app-config.yaml). Asi la
+# MISMA imagen sirve para cualquier dominio/ambiente: solo cambia la variable.
+# Mientras el dominio/exposicion este POR DEFINIR, el ConfigMap trae un
+# placeholder; actualizarlo cuando exista el dominio real.
 # -----------------------------------------------------------------------------
 app:
-  baseUrl: https://backstage.tu-dominio.com
+  baseUrl: ${BACKSTAGE_BASE_URL}
 
 backend:
-  baseUrl: https://backstage.tu-dominio.com
+  baseUrl: ${BACKSTAGE_BASE_URL}
   listen: ':7007'
   cors:
-    origin: https://backstage.tu-dominio.com
+    origin: ${BACKSTAGE_BASE_URL}
     methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
     credentials: true
 

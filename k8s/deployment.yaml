@@ -31,6 +31,18 @@ spec:
           # <account>.dkr.ecr.<region>.amazonaws.com/backstage:latest
           image: REEMPLAZAR_ECR_IMAGE_URI
           imagePullPolicy: IfNotPresent
+          # Sobrescribe el CMD del Dockerfile para agregar app-config.eks.yaml
+          # (montado desde el ConfigMap) como ultimo --config: parametriza el
+          # baseUrl via ${BACKSTAGE_BASE_URL} sin reconstruir la imagen.
+          args:
+            - "node"
+            - "packages/backend"
+            - "--config"
+            - "app-config.yaml"
+            - "--config"
+            - "app-config.production.yaml"
+            - "--config"
+            - "/app/config/app-config.eks.yaml"
           ports:
             - name: http
               containerPort: 7007
@@ -39,11 +51,19 @@ spec:
             - name: TECHDOCS_PUBLISHER_LOCAL_PUBLISH_DIR
               value: /app/data/techdocs
           envFrom:
+            # Variables NO sensibles (BACKSTAGE_BASE_URL). Editable sin rebuild.
+            - configMapRef:
+                name: backstage-config
+            # Secretos (GITHUB_TOKEN, AUTH_GITHUB_CLIENT_ID/SECRET).
             - secretRef:
                 name: backstage-secrets
           volumeMounts:
             - name: backstage-data
               mountPath: /app/data
+            # app-config.eks.yaml montado como archivo (solo lectura).
+            - name: app-config-eks
+              mountPath: /app/config
+              readOnly: true
           # Backend system nuevo (createBackend): los endpoints de salud son
           # /.backstage/health/v1/{readiness,liveness}, NO /healthcheck (ese era
           # del backend legacy con Express).
@@ -72,3 +92,6 @@ spec:
         - name: backstage-data
           persistentVolumeClaim:
             claimName: backstage-data
+        - name: app-config-eks
+          configMap:
+            name: backstage-app-config-eks

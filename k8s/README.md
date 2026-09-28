@@ -66,6 +66,7 @@ kubectl create secret generic backstage-secrets \
 ```bash
 kubectl apply -f k8s/namespace.yaml
 kubectl apply -f k8s/pvc.yaml
+kubectl apply -f k8s/configmap-app-config.yaml
 kubectl apply -f k8s/service.yaml
 kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/ingress.yaml
@@ -81,16 +82,26 @@ kubectl get ingress -n backstage      # muestra la URL del ALB
 
 Cuando el ALB esté listo, apunta tu DNS (Route53) al hostname del ALB y abre tu dominio.
 
-## Sobre app-config.eks.yaml
+## Sobre app-config.eks.yaml (dominio como variable)
 
-El `baseUrl` DEBE apuntar a tu dominio real, no a localhost, o el frontend y el
-login por GitHub fallarán detrás del ALB. Dos formas de inyectarlo:
+El `baseUrl` DEBE apuntar al dominio real, no a localhost, o el frontend y el
+login por GitHub fallan detras del ALB. La solucion aqui NO hardcodea el dominio:
 
-- **Opción A (simple):** reconstruir la imagen incluyendo `app-config.eks.yaml` y
-  añadirlo al `CMD` con otro `--config`.
-- **Opción B (sin rebuild):** montar `app-config.eks.yaml` como ConfigMap y pasar
-  un `--config` adicional en los args del contenedor. Puedo prepararte el ConfigMap
-  si eliges esta vía.
+- `app-config.eks.yaml` usa `${BACKSTAGE_BASE_URL}` (Backstage interpola `${VAR}`
+  al arrancar).
+- Se monta como archivo desde el ConfigMap `backstage-app-config-eks`
+  (`k8s/configmap-app-config.yaml`) y se pasa como `--config` extra en los `args`
+  del Deployment (ultimo config gana).
+- La variable `BACKSTAGE_BASE_URL` vive en el ConfigMap `backstage-config` y se
+  inyecta via `envFrom`.
+
+Ventaja: la **misma imagen** sirve para cualquier dominio/ambiente. Para cambiar
+el dominio solo editas el ConfigMap `backstage-config` y reinicias el pod
+(`kubectl rollout restart deploy/backstage -n backstage`), sin reconstruir imagen.
+
+> El dominio/exposicion aun esta POR DEFINIR: el ConfigMap trae un placeholder
+> (`https://backstage.PLACEHOLDER.example.com`). Reemplazarlo por el dominio real
+> (debe coincidir con el `host` del Ingress) cuando exista.
 
 ## Cuando quieras escalar (más de 1 réplica)
 
