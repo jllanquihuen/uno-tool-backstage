@@ -22,8 +22,8 @@ backend:
     methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
     credentials: true
 
-  # Sigue usando SQLite sobre el volumen persistente (/app/data).
-  # Cuando migres a Postgres, reemplaza este bloque por client: pg.
+  # SQLite sobre el volumen persistente (/app/data). Es el modelo definitivo
+  # para este alcance (1 replica). Postgres no esta contemplado.
   database:
     client: better-sqlite3
     connection:

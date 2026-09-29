@@ -103,16 +103,12 @@ el dominio solo editas el ConfigMap `backstage-config` y reinicias el pod
 > (`https://backstage.PLACEHOLDER.example.com`). Reemplazarlo por el dominio real
 > (debe coincidir con el `host` del Ingress) cuando exista.
 
-## Cuando quieras escalar (más de 1 réplica)
+## Nota sobre escala (fuera de alcance)
 
-Con el setup actual NO puedes subir `replicas` por encima de 1, porque:
+Este despliegue es **1 réplica a propósito**: SQLite es un archivo local (un solo
+escritor) y el PVC es `ReadWriteOnce` (EBS se monta en un nodo a la vez). Es el
+modelo definitivo para este alcance.
 
-- SQLite es un archivo local, no soporta múltiples escritores.
-- El PVC es `ReadWriteOnce` (EBS solo se monta en un nodo a la vez).
-
-Para escalar hay que:
-
-1. Migrar la base de datos a **PostgreSQL (RDS)** → cambiar `database.client` a `pg`.
-2. Cambiar el storage de TechDocs a **EFS** (`ReadWriteMany`) o a **S3** (`publisher: awsS3`).
-
-Cuando llegues a ese punto, avísame y adaptamos los manifiestos.
+Escalar a varias réplicas (que exigiría Postgres/RDS y storage compartido S3/EFS)
+**no está contemplado**; sería una decisión de un futuro lejano solo si aparece una
+necesidad real de HA. No mantener `replicas > 1` con este setup.

@@ -49,11 +49,12 @@ Punto de partida: **1 réplica**, **SQLite sobre PVC** (EBS `auto-ebs-sc`),
 ConfigMap `backstage-config` (`BACKSTAGE_BASE_URL`), no se hornea en la imagen.
 
 Ver **[`k8s/README.md`](k8s/README.md)** para los pasos completos (ECR, Secret,
-apply de manifiestos, verificación) y el camino de escalado (Postgres/RDS + S3/EFS).
+apply de manifiestos, verificación).
 
 ## Estado y pendientes
 
-- Base de datos: **SQLite** (arranque). Migrar a **PostgreSQL (RDS)** para HA/escala.
-- TechDocs: **local**. Migrar a **S3** (`publisher: awsS3`) para varias réplicas.
+- Persistencia: **SQLite sobre PVC + TechDocs local** es el modelo definitivo para
+  este alcance (1 réplica). No se contempla Postgres/RDS ni S3; sería decisión de
+  un futuro lejano solo si se necesitara HA/multi-réplica.
 - Exposición/DNS: **por definir** (el `BACKSTAGE_BASE_URL` y el `host` del Ingress
   traen placeholder hasta entonces).
