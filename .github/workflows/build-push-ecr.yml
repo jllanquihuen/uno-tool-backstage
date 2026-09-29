@@ -13,10 +13,21 @@ name: Build & Push Backstage image to ECR
 # El tag de la imagen es el SHA corto del commit (inmutable, para rollback/auditoría).
 
 on:
-  push:
-    branches:
-      - main
+  # Solo disparo MANUAL por ahora (evita builds/push en cada commit a main,
+  # p. ej. cambios de docs, k8s o README que no afectan la imagen).
   workflow_dispatch:
+
+  # Para automatizar mas adelante sin desperdicio: disparar en push a main solo
+  # cuando cambie codigo que afecta la imagen. Descomentar cuando aplique.
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - "packages/**"
+  #     - "app-config*.yaml"
+  #     - "package.json"
+  #     - "yarn.lock"
+  #     - ".yarnrc.yml"
+  #     - "backstage.json"
 
 permissions:
   contents: read
