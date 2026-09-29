@@ -1,0 +1,100 @@
+name: Deploy Backstage to EKS
+
+# Despliega Backstage al cluster EKS aplicando los manifiestos k8s/ y apuntando
+# el Deployment a una imagen ya publicada en ECR (tag = SHA). Autenticacion por
+# OIDC con el rol namespace-scoped github-actions-backstage-deploy (acceso RBAC
+# solo al namespace backstage; NO cluster-admin).
+#
+# Requisitos (Settings del repo → Secrets and variables → Actions):
+#   Variables:
+#     AWS_DEPLOY_ROLE_ARN  -> ARN del rol github-actions-backstage-deploy (output del bootstrap)
+#     AWS_REGION           -> ej. us-east-1
+#     EKS_CLUSTER_NAME     -> ej. prod-cluster
+#     ECR_REPOSITORY       -> ej. backstage
+#   (El Secret backstage-secrets con GITHUB_TOKEN/OAuth se crea aparte en el cluster.)
+#
+# El tag a desplegar se elige manualmente (default: el SHA corto del commit actual).
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Tag de la imagen en ECR a desplegar (vacio = SHA corto del commit actual)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-eks-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Resolve image tag + registry
+        id: meta
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.inputs.image_tag }}"
+          if [ -z "${TAG}" ]; then
+            TAG="$(git rev-parse --short=12 HEAD)"
+          fi
+          ACCOUNT_ID="$(aws sts get-caller-identity --query 'Account' --output text)"
+          REGISTRY="${ACCOUNT_ID}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com"
+          echo "tag=${TAG}"                                              >> "${GITHUB_OUTPUT}"
+          echo "image=${REGISTRY}/${{ vars.ECR_REPOSITORY }}:${TAG}"     >> "${GITHUB_OUTPUT}"
+          echo "Imagen objetivo: ${REGISTRY}/${{ vars.ECR_REPOSITORY }}:${TAG}"
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ vars.EKS_CLUSTER_NAME }}" \
+            --region "${{ vars.AWS_REGION }}"
+
+      - name: Apply manifests (namespace-scoped)
+        run: |
+          set -euo pipefail
+          # NOTA (least-privilege): el rol de deploy tiene RBAC SOLO dentro del
+          # namespace backstage. Crear el Namespace es cluster-scoped y NO le
+          # corresponde a este rol → el namespace debe PRE-EXISTIR (creado una
+          # vez con permisos mayores: kubectl apply -f k8s/namespace.yaml, o via
+          # infra/governance). Por eso aqui NO se aplica namespace.yaml.
+          kubectl apply -n backstage -f k8s/configmap-app-config.yaml
+          kubectl apply -n backstage -f k8s/pvc.yaml
+          kubectl apply -n backstage -f k8s/service.yaml
+          kubectl apply -n backstage -f k8s/deployment.yaml
+          kubectl apply -n backstage -f k8s/ingress.yaml
+
+      - name: Set image + rollout
+        run: |
+          set -euo pipefail
+          kubectl set image deployment/backstage \
+            backstage="${{ steps.meta.outputs.image }}" \
+            -n backstage
+          kubectl rollout status deployment/backstage -n backstage --timeout=300s
+
+      - name: Deploy summary
+        run: |
+          {
+            echo "### Backstage desplegado"
+            echo ""
+            echo '```'
+            echo "imagen: ${{ steps.meta.outputs.image }}"
+            echo "cluster: ${{ vars.EKS_CLUSTER_NAME }}  ns: backstage"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
