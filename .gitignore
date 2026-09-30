@@ -70,7 +70,4 @@ Dockerfile.config
 
 
 
-# Local backups
-*.bk
-
 *.ori
