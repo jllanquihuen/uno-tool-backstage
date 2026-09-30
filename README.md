@@ -48,8 +48,9 @@ Punto de partida: **1 réplica**, **SQLite sobre PVC** (EBS `auto-ebs-sc`),
 **TechDocs local**, **Service + Ingress (ALB)**. El dominio se parametriza vía el
 ConfigMap `backstage-config` (`BACKSTAGE_BASE_URL`), no se hornea en la imagen.
 
-Ver **[`k8s/README.md`](k8s/README.md)** para los pasos completos (ECR, Secret,
-apply de manifiestos, verificación).
+Guía operativa completa (requisitos, build → push → deploy, acceso,
+troubleshooting): **[`docs/deploy.md`](docs/deploy.md)**. Referencia de los
+manifiestos: **[`k8s/README.md`](k8s/README.md)**.
 
 ## Estado y pendientes
 
