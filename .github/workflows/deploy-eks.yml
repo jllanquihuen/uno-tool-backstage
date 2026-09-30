@@ -78,7 +78,9 @@ jobs:
           kubectl apply -n backstage -f k8s/pvc.yaml
           kubectl apply -n backstage -f k8s/service.yaml
           kubectl apply -n backstage -f k8s/deployment.yaml
-          kubectl apply -n backstage -f k8s/ingress.yaml
+          # Exposicion externa (k8s/optional/ingress.yaml) NO se aplica aqui:
+          # el workload queda ClusterIP (mismo principio que Grafana). La
+          # exposicion se define aparte cuando exista dominio/conectividad.
 
       - name: Set image + rollout
         run: |

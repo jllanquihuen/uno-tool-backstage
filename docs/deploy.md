@@ -110,8 +110,9 @@ aws ecr list-images --repository-name backstage --region us-east-1 \
   imagen construida (ver troubleshooting `ImagePullBackOff`).
 
 El workflow asume el rol de deploy, aplica `k8s/` en el namespace `backstage`
-(configmap, pvc, service, deployment, ingress — **no** namespace.yaml) y hace
-`set image` + `rollout status`.
+(configmap, pvc, service, deployment — **no** namespace.yaml ni ingress) y hace
+`set image` + `rollout status`. El workload queda **ClusterIP**; la exposición
+externa es una capa aparte (ver Acceso → Producción).
 
 ### 3. Verificar
 
@@ -137,11 +138,14 @@ kubectl port-forward -n backstage svc/backstage 7007:80
 # abrir http://localhost:7007  (login: Guest)
 ```
 
-### Producción (Ingress + dominio)
+### Producción (exposición externa — por definir)
 
-El `k8s/ingress.yaml` crea un ALB. Requiere: AWS Load Balancer Controller en el
-cluster, un dominio real, certificado ACM, y que `BACKSTAGE_BASE_URL` (ConfigMap
-`backstage-config`) y el `host` del Ingress coincidan con ese dominio.
+Mismo principio que Grafana: la app queda **ClusterIP** y la exposición externa
+se define aparte cuando exista dominio + DNS + certificado + un controlador de
+ingreso decidido (ALB Ingress Controller o Gateway API — sin Kong). La plantilla
+vive en `k8s/optional/ingress.yaml` y **no se aplica por defecto**. Cuando se
+defina: ajustar `host` + `certificate-arn`, asegurar que `host` == 
+`BACKSTAGE_BASE_URL`, y `kubectl apply -f k8s/optional/ingress.yaml`.
 
 ---
 

@@ -1,10 +1,12 @@
 # Despliegue de Backstage en EKS
 
 Punto de partida: **1 réplica**, **SQLite sobre un PVC** (EBS gp3), **TechDocs local**
-sobre el mismo volumen, **Secret** de Kubernetes para los tokens, y **Service + Ingress (ALB)**.
+sobre el mismo volumen, **Secret** de Kubernetes para los tokens, y **Service ClusterIP**.
 
-Es un setup para arrancar. Para escalar a varias réplicas hay que migrar a
-Postgres (RDS) y a storage compartido (EFS o S3). Ver el final de este documento.
+**Exposición externa:** el workload queda ClusterIP (mismo principio que Grafana);
+la exposición externa NO la impone la app y se define aparte cuando exista
+dominio/conectividad. La plantilla de Ingress vive en `k8s/optional/ingress.yaml`
+y NO se aplica por defecto (ver "Exposición externa" más abajo).
 
 ## Archivos
 
@@ -14,18 +16,18 @@ Postgres (RDS) y a storage compartido (EFS o S3). Ver el final de este documento
 | `pvc.yaml` | Disco persistente de 10Gi para `/app/data` |
 | `secret.example.yaml` | Plantilla del Secret con los tokens (no subir con valores reales) |
 | `deployment.yaml` | El pod de Backstage, monta el volumen, lee el Secret |
-| `service.yaml` | Expone el puerto 7007 dentro del cluster |
-| `ingress.yaml` | ALB que expone Backstage al exterior |
+| `service.yaml` | Service ClusterIP (puerto 7007 dentro del cluster) |
+| `configmap-app-config.yaml` | ConfigMaps: app-config.eks + BACKSTAGE_BASE_URL |
+| `optional/ingress.yaml` | Plantilla de exposición externa (ALB). NO se aplica por defecto |
 
 ## Requisitos previos
 
 1. Cluster EKS activo y `kubectl` apuntando a él (`kubectl get nodes` debe responder).
-2. **AWS Load Balancer Controller** instalado (para que el Ingress cree el ALB).
-   - Verifica: `kubectl get deploy -n kube-system aws-load-balancer-controller`
-3. **Almacenamiento EBS** disponible. En EKS Auto Mode la StorageClass es `auto-ebs-sc`
-   (ya usada en `pvc.yaml`). NO uses `gp3`: ese provisioner no existe en Auto Mode.
-   - Verifica: `kubectl get storageclass`
-4. Imagen subida a **ECR** (EKS no puede usar tu imagen local de Docker).
+2. **StorageClass `auto-ebs-sc`** disponible (la crea el stack de infra, módulo
+   `storage_class`; `pvc.yaml` la usa). Verifica: `kubectl get storageclass`.
+3. Imagen subida a **ECR** (EKS no puede usar tu imagen local de Docker).
+4. (Solo si se expone externamente) **AWS Load Balancer Controller** u otro
+   controlador de ingreso — ver "Exposición externa".
 
 ## Paso 1: Subir la imagen a ECR
 
@@ -45,8 +47,8 @@ docker push <account>.dkr.ecr.<region>.amazonaws.com/backstage:latest
 ## Paso 2: Ajustar los valores a reemplazar
 
 - `deployment.yaml` → `image:` con la URI real de ECR.
-- `ingress.yaml` → `host:` con tu dominio, y el `certificate-arn` de ACM si usas HTTPS.
-- `app-config.eks.yaml` (en la raíz del repo) → `baseUrl` con tu dominio.
+- `app-config.eks.yaml` (raíz del repo) usa `${BACKSTAGE_BASE_URL}` del ConfigMap
+  `backstage-config` (no se hardcodea el dominio).
 
 ## Paso 3: Crear el Secret con los tokens
 
@@ -69,7 +71,23 @@ kubectl apply -f k8s/pvc.yaml
 kubectl apply -f k8s/configmap-app-config.yaml
 kubectl apply -f k8s/service.yaml
 kubectl apply -f k8s/deployment.yaml
-kubectl apply -f k8s/ingress.yaml
+# NOTA: el Ingress (k8s/optional/) NO se aplica aquí: el workload queda ClusterIP.
+```
+
+## Exposición externa (opcional, por definir)
+
+Mismo principio que Grafana: la app queda **ClusterIP** y la exposición externa
+se define aparte, por entorno, cuando exista dominio + DNS + certificado + un
+controlador de ingreso decidido (ALB Ingress Controller o Gateway API).
+
+Mientras no esté definido, para acceder en pruebas usa **port-forward**:
+```bash
+kubectl port-forward -n backstage svc/backstage 7007:80   # http://localhost:7007
+```
+
+Cuando la exposición esté definida, edita y aplica la plantilla:
+```bash
+kubectl apply -f k8s/optional/ingress.yaml   # tras ajustar host + certificate-arn
 ```
 
 ## Paso 5: Verificar

@@ -1,0 +1,45 @@
+# -----------------------------------------------------------------------------
+# EXPOSICIÓN EXTERNA — OPCIONAL Y POR DEFINIR (no se aplica por defecto).
+#
+# Principio de la plataforma (igual que Grafana): el workload queda con Service
+# ClusterIP y la exposición externa NO la impone la app. Se define aparte, por
+# entorno, cuando exista la conectividad (dominio + DNS + certificado + un
+# controlador de ingreso decidido — ALB Ingress Controller o Gateway API).
+#
+# Mientras eso NO esté definido, este manifiesto queda aquí como plantilla y el
+# deploy NO lo aplica. Para exponer Backstage cuando corresponda:
+#   1. Definir la vía de exposición de la plataforma (ALB o Gateway API).
+#   2. Reemplazar host / certificate-arn con los valores reales.
+#   3. Asegurar que host == BACKSTAGE_BASE_URL (ConfigMap backstage-config).
+#   4. Aplicar este archivo explícitamente: kubectl apply -f k8s/optional/ingress.yaml
+#
+# Este ejemplo asume AWS Load Balancer Controller (ALB). Si la plataforma adopta
+# Gateway API, reemplazar por un HTTPRoute equivalente.
+# -----------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backstage
+  namespace: backstage
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /.backstage/health/v1/readiness
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    # Para HTTPS: descomenta y pon el ARN de tu certificado ACM.
+    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:<region>:<account>:certificate/<id>
+    # alb.ingress.kubernetes.io/ssl-redirect: '443'
+spec:
+  rules:
+    # REEMPLAZAR por el dominio real (debe coincidir con BACKSTAGE_BASE_URL).
+    - host: backstage.tu-dominio.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backstage
+                port:
+                  number: 80
